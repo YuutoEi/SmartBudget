@@ -16,8 +16,8 @@ import kotlinx.coroutines.launch
 
 class TransactionViewModel(private val repository: BudgetRepository) : ViewModel() {
 
-    // State untuk mengontrol tema gelap/terang secara manual (Default ke Dark Mode)
-    private val _isDarkTheme = MutableStateFlow(true)
+    // State untuk mengontrol tema gelap/terang secara manual (Default ke Light Warm Mode seperti referensi)
+    private val _isDarkTheme = MutableStateFlow(false)
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
     fun setDarkTheme(enabled: Boolean) {

@@ -112,10 +112,12 @@ fun AllTransactionsScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
+                .statusBarsPadding()
+                .navigationBarsPadding()
                 .padding(horizontal = 16.dp)
         ) {
             // Header Minimalis
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -204,15 +206,7 @@ fun AllTransactionsScreen(
                             .width(64.dp)
                             .height(38.dp)
                             .background(
-                                brush = if (isMonthSelected) {
-                                    Brush.linearGradient(colors = listOf(ElectricIndigo, NeonPink))
-                                } else {
-                                    Brush.linearGradient(colors = listOf(Color.Transparent, Color.Transparent))
-                                },
-                                shape = RoundedCornerShape(19.dp)
-                            )
-                            .background(
-                                color = if (isMonthSelected) Color.Transparent else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                color = if (isMonthSelected) AccentOrange else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                                 shape = RoundedCornerShape(19.dp)
                             )
                             .clickable { selectedMonth = monthIndex },
@@ -308,7 +302,7 @@ fun AllTransactionsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    contentPadding = PaddingValues(bottom = 16.dp),
+                    contentPadding = PaddingValues(bottom = 90.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(filteredTransactions, key = { it.transaction.id }) { transactionWithDetails ->

@@ -3,16 +3,18 @@ package com.dhandy.smartbudget.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -43,54 +45,100 @@ fun WalletCalculatorScreen(
 ) {
     val wallets by viewModel.wallets.collectAsState()
     val tokens = remember { mutableStateListOf<Token>() }
+    var walletDropdownExpanded by remember { mutableStateOf(false) }
     
     // Evaluasi hasil secara real-time
     val evaluatedResult = remember(tokens.size, if (tokens.isNotEmpty()) tokens.last() else null) {
         evaluateTokens(tokens)
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { 
+    // Modal Bottom Sheet Layout: Background gelap transparan di luar sheet, Sheet meluncur dari bawah dengan Rounded Top Corners
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.5f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onNavigateBack
+            ),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.92f)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {} // Mencegah klik di dalam sheet menutup kalkulator
+                ),
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            color = MaterialTheme.colorScheme.background,
+            shadowElevation = 16.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .navigationBarsPadding()
+            ) {
+                // Drag Handle Bar minimalis di bagian atas
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp, bottom = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(42.dp)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(MaterialTheme.colorScheme.outlineVariant)
+                    )
+                }
+
+                // Header Sheet
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        "Kalkulator Dompet", 
+                        text = "Kalkulator Dompet",
                         fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
                         color = MaterialTheme.colorScheme.onBackground
-                    ) 
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    )
+
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(MaterialTheme.colorScheme.surface, CircleShape)
+                    ) {
                         Icon(
-                            Icons.Default.ArrowBack, 
-                            contentDescription = "Kembali",
-                            tint = MaterialTheme.colorScheme.onBackground
+                            Icons.Outlined.Close,
+                            contentDescription = "Tutup",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            // 1. Area Tampilan Rumus & Hasil (Layar Kalkulator)
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .weight(1.5f),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                )
-            ) {
+                }
+
+                // 1. Area Tampilan Rumus & Hasil (Layar Kalkulator)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .weight(1.3f),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    )
+                ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -189,35 +237,101 @@ fun WalletCalculatorScreen(
                 }
             }
 
-            // 2. Daftar Dompet (Horizontal Scrollable)
-            Column(
+            // 2. Daftar Dompet (1 lebar dari kanan ke kiri dengan Dropdown)
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
             ) {
-                Text(
-                    text = "Pilih Saldo Dompet:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ExposedDropdownMenuBox(
+                    expanded = walletDropdownExpanded,
+                    onExpandedChange = { walletDropdownExpanded = it },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    wallets.forEach { wallet ->
-                        WalletButtonCard(
-                            wallet = wallet,
-                            onClick = {
-                                // Logika penambahan token dompet
-                                tokens.add(Token.Wallet(wallet))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(16.dp),
+                        shadowElevation = 2.dp,
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                            .clickable { walletDropdownExpanded = !walletDropdownExpanded }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "💰",
+                                    fontSize = 18.sp
+                                )
+                                Column {
+                                    Text(
+                                        text = "Pilih Saldo Dompet",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Sentuh untuk masukkan saldo dompet",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    )
+                                }
                             }
-                        )
+
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = walletDropdownExpanded)
+                        }
+                    }
+
+                    ExposedDropdownMenu(
+                        expanded = walletDropdownExpanded,
+                        onDismissRequest = { walletDropdownExpanded = false },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (wallets.isEmpty()) {
+                            DropdownMenuItem(
+                                text = { Text("Belum ada dompet", fontSize = 13.sp) },
+                                onClick = { walletDropdownExpanded = false }
+                            )
+                        } else {
+                            wallets.forEach { wallet ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = wallet.name,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp
+                                            )
+                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Text(
+                                                text = formatCurrency(wallet.currentBalance),
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        tokens.add(Token.Wallet(wallet))
+                                        walletDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -322,6 +436,7 @@ fun WalletCalculatorScreen(
             }
         }
     }
+}
 }
 
 // Menambahkan angka ke formula

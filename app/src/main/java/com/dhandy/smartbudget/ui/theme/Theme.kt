@@ -13,33 +13,39 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = LightIndigo,
-    secondary = LightTeal,
-    tertiary = LightPink,
-    background = Slate900,
-    surface = Slate800,
-    surfaceVariant = Slate700,
-    onPrimary = Slate900,
-    onSecondary = Slate900,
-    onTertiary = Slate900,
+    primary = Color.White,
+    secondary = Color(0xFFCCCCCC),
+    tertiary = Color(0xFFAAAAAA),
+    background = Color(0xFF000000),
+    surface = Color(0xFF121212),
+    surfaceVariant = Color(0xFF222222),
+    onPrimary = Color.Black,
+    onSecondary = Color.Black,
+    onTertiary = Color.Black,
     onBackground = Color.White,
     onSurface = Color.White,
-    error = CoralRed
+    onSurfaceVariant = Color(0xFFB0B0B0),
+    outline = Color(0xFF333333),
+    outlineVariant = Color(0xFF262626),
+    error = Color(0xFFE53935)
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = DarkIndigo,
-    secondary = CyberTeal,
-    tertiary = NeonPink,
-    background = Slate50,
-    surface = Color.White,
-    surfaceVariant = Slate100,
+    primary = Color.Black,
+    secondary = Color(0xFF444444),
+    tertiary = Color(0xFF666666),
+    background = Color(0xFFFFFFFF),
+    surface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFFF3F3F3),
     onPrimary = Color.White,
     onSecondary = Color.White,
     onTertiary = Color.White,
-    onBackground = Slate900,
-    onSurface = Slate900,
-    error = CoralRed
+    onBackground = Color.Black,
+    onSurface = Color.Black,
+    onSurfaceVariant = Color(0xFF555555),
+    outline = Color(0xFFE0E0E0),
+    outlineVariant = Color(0xFFEEEEEE),
+    error = Color(0xFFD32F2F)
 )
 
 @Composable

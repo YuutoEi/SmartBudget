@@ -1,9 +1,27 @@
 package com.dhandy.smartbudget.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -13,6 +31,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Calculate
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,6 +55,8 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.hypot
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,45 +89,28 @@ fun DashboardScreen(
     val totalIncome = transactions.filter { it.category.type == "INCOME" }.sumOf { it.transaction.amount }
     val totalExpense = transactions.filter { it.category.type == "EXPENSE" }.sumOf { it.transaction.amount }
 
-    Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAddTransactionClick,
-                shape = CircleShape,
-                containerColor = Color.Transparent,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+    var buttonCenterInRoot by remember { mutableStateOf(Offset.Zero) }
+    var isCircleRevealing by remember { mutableStateOf(false) }
+    var revealTargetIsDark by remember { mutableStateOf(isDarkTheme) }
+    val revealRadiusProgress = remember { Animatable(0f) }
+    val revealAlpha = remember { Animatable(1f) }
+    val coinRotation = remember { Animatable(if (isDarkTheme) 180f else 0f) }
+    val coroutineScope = rememberCoroutineScope()
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        ) { paddingValues ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .statusBarsPadding()
+                    .background(MaterialTheme.colorScheme.background),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 100.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .background(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    com.dhandy.smartbudget.ui.theme.ElectricIndigo,
-                                    com.dhandy.smartbudget.ui.theme.NeonPink
-                                )
-                            ),
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Filled.Add, 
-                        contentDescription = "Tambah Transaksi",
-                        tint = Color.White
-                    )
-                }
-            }
-        }
-    ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
             // 0. Custom Header
             item {
                 Row(
@@ -123,12 +131,7 @@ fun DashboardScreen(
                         Text(
                             text = "SmartBudget",
                             style = TextStyle(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(
-                                        com.dhandy.smartbudget.ui.theme.ElectricIndigo,
-                                        com.dhandy.smartbudget.ui.theme.NeonPink
-                                    )
-                                ),
+                                color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = 32.sp,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = (-1).sp
@@ -140,33 +143,37 @@ fun DashboardScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        IconButton(
-                            onClick = onCalculatorClick,
-                            modifier = Modifier
-                                .background(
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    shape = CircleShape
-                                )
-                                .size(34.dp)
-                        ) {
-                            Text(text = "🧮", fontSize = 15.sp)
-                        }
-
-                        IconButton(
-                            onClick = onAnalyticsClick,
-                            modifier = Modifier
-                                .background(
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    shape = CircleShape
-                                )
-                                .size(34.dp)
-                        ) {
-                            Text(text = "📊", fontSize = 15.sp)
-                        }
-
-                        ThemeToggleSwitch(
-                            isDark = isDarkTheme,
-                            onToggle = { viewModel.setDarkTheme(!isDarkTheme) }
+                        ThemeCoinButton(
+                            coinRotation = coinRotation.value,
+                            isAnimating = isCircleRevealing,
+                            onPositioned = { center -> buttonCenterInRoot = center },
+                            onToggle = {
+                                if (!isCircleRevealing) {
+                                    val targetDark = !isDarkTheme
+                                    revealTargetIsDark = targetDark
+                                    isCircleRevealing = true
+                                    coroutineScope.launch {
+                                        launch {
+                                            coinRotation.animateTo(
+                                                targetValue = coinRotation.value + 180f,
+                                                animationSpec = tween(durationMillis = 520, easing = FastOutSlowInEasing)
+                                            )
+                                        }
+                                        launch {
+                                            revealRadiusProgress.snapTo(0f)
+                                            revealRadiusProgress.animateTo(
+                                                targetValue = 1f,
+                                                animationSpec = tween(durationMillis = 460, easing = FastOutSlowInEasing)
+                                            )
+                                            viewModel.setDarkTheme(targetDark)
+                                            kotlinx.coroutines.delay(40)
+                                            revealAlpha.animateTo(0f, animationSpec = tween(120))
+                                            isCircleRevealing = false
+                                            revealAlpha.snapTo(1f)
+                                        }
+                                    }
+                                }
+                            }
                         )
                     }
                 }
@@ -201,16 +208,7 @@ fun DashboardScreen(
                                 .weight(1f)
                                 .fillMaxHeight()
                                 .background(
-                                    brush = if (isTab0Active) {
-                                        Brush.linearGradient(
-                                            colors = listOf(
-                                                com.dhandy.smartbudget.ui.theme.ElectricIndigo,
-                                                com.dhandy.smartbudget.ui.theme.CyberTeal
-                                            )
-                                        )
-                                    } else {
-                                        Brush.linearGradient(colors = listOf(Color.Transparent, Color.Transparent))
-                                    },
+                                    color = if (isTab0Active) AccentOrange else Color.Transparent,
                                     shape = RoundedCornerShape(22.dp)
                                 )
                                 .clickable { activeTab = 0 },
@@ -231,16 +229,7 @@ fun DashboardScreen(
                                 .weight(1f)
                                 .fillMaxHeight()
                                 .background(
-                                    brush = if (isTab1Active) {
-                                        Brush.linearGradient(
-                                            colors = listOf(
-                                                com.dhandy.smartbudget.ui.theme.ElectricIndigo,
-                                                com.dhandy.smartbudget.ui.theme.NeonPink
-                                            )
-                                        )
-                                    } else {
-                                        Brush.linearGradient(colors = listOf(Color.Transparent, Color.Transparent))
-                                    },
+                                    color = if (isTab1Active) AccentOrange else Color.Transparent,
                                     shape = RoundedCornerShape(22.dp)
                                 )
                                 .clickable { activeTab = 1 },
@@ -360,7 +349,7 @@ fun DashboardScreen(
                         Text(
                             text = "Lihat Semua ➜", 
                             fontWeight = FontWeight.Bold, 
-                            color = ElectricIndigo
+                            color = AccentOrange
                         )
                     }
                 }
@@ -938,95 +927,176 @@ fun DashboardScreen(
             }
         )
     }
+
+    // Circular Reveal Animation Overlay
+    if (isCircleRevealing && buttonCenterInRoot != Offset.Zero) {
+        val targetBgColor = if (revealTargetIsDark) Color.Black else Color.White
+        val ringGlowColor = if (revealTargetIsDark) Color.White else Color.Black
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {}
+        ) {
+            val center = buttonCenterInRoot
+            val maxRadius = maxOf(
+                hypot(center.x, center.y),
+                hypot(size.width - center.x, center.y),
+                hypot(center.x, size.height - center.y),
+                hypot(size.width - center.x, size.height - center.y)
+            )
+            val currentRadius = maxRadius * revealRadiusProgress.value
+            val alpha = revealAlpha.value
+
+            if (currentRadius > 0f) {
+                val coinHoleRadius = 24.dp.toPx()
+                if (currentRadius <= coinHoleRadius) {
+                    drawCircle(
+                        color = targetBgColor.copy(alpha = alpha),
+                        radius = currentRadius,
+                        center = center
+                    )
+                } else {
+                    val circlePath = Path().apply {
+                        addOval(Rect(center = center, radius = currentRadius))
+                    }
+                    val holePath = Path().apply {
+                        addOval(Rect(center = center, radius = coinHoleRadius))
+                    }
+                    val revealPath = Path().apply {
+                        op(circlePath, holePath, PathOperation.Difference)
+                    }
+                    drawPath(
+                        path = revealPath,
+                        color = targetBgColor.copy(alpha = alpha)
+                    )
+                }
+
+                // Radiant glowing wavefront at the perimeter of the circle
+                if (revealRadiusProgress.value in 0.02f..0.98f) {
+                    drawCircle(
+                        color = ringGlowColor.copy(alpha = alpha * (1f - revealRadiusProgress.value * 0.35f)),
+                        radius = currentRadius,
+                        center = center,
+                        style = Stroke(width = 5.dp.toPx())
+                    )
+                }
+            }
+        }
+    }
+}
 }
 
 @Composable
 fun SummaryCard(totalBalance: Double, totalIncome: Double, totalExpense: Double) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(containerColor = WarmYellowCard),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            ElectricIndigo,
-                            NeonPink
-                        )
-                    )
-                )
-                .padding(24.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column {
-                Text(
-                    "TOTAL SALDO", 
-                    style = MaterialTheme.typography.labelMedium, 
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White.copy(alpha = 0.7f),
-                    letterSpacing = 1.5.sp
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    formatCurrency(totalBalance), 
-                    style = MaterialTheme.typography.headlineLarge.copy(fontSize = 32.sp), 
-                    fontWeight = FontWeight.Black, 
-                    color = Color.White
-                )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(), 
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Text(
+                "Today Balance",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = DarkNavBrown.copy(alpha = 0.75f)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                formatCurrency(totalBalance),
+                style = MaterialTheme.typography.headlineLarge.copy(fontSize = 32.sp),
+                fontWeight = FontWeight.Black,
+                color = DarkNavBrown
+            )
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Speedometer Arc Gauge
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(130.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                val budgetLimit = (totalIncome.takeIf { it > 0 } ?: (totalBalance + totalExpense)).coerceAtLeast(1.0)
+                val expenseRatio = (totalExpense / budgetLimit).toFloat().coerceIn(0f, 1f)
+                val remainingAmount = (budgetLimit - totalExpense).coerceAtLeast(0.0)
+
+                androidx.compose.foundation.Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .fillMaxHeight()
                 ) {
-                    // Pemasukan Box
+                    val strokeW = 14.dp.toPx()
+                    val arcSize = size.width - strokeW
+                    val topLeftOffset = androidx.compose.ui.geometry.Offset(strokeW / 2, size.height - (arcSize / 2))
+
+                    // Background track (Light Arc)
+                    drawArc(
+                        color = Color.White.copy(alpha = 0.45f),
+                        startAngle = 180f,
+                        sweepAngle = 180f,
+                        useCenter = false,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeW, cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                        size = androidx.compose.ui.geometry.Size(arcSize, arcSize),
+                        topLeft = topLeftOffset
+                    )
+
+                    // Active progress track (Gradient / Orange Arc)
+                    drawArc(
+                        color = AccentOrange,
+                        startAngle = 180f,
+                        sweepAngle = 180f * expenseRatio,
+                        useCenter = false,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeW, cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                        size = androidx.compose.ui.geometry.Size(arcSize, arcSize),
+                        topLeft = topLeftOffset
+                    )
+                }
+
+                // Center Left Remaining Badge
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                ) {
                     Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-                            .padding(14.dp)
+                            .size(44.dp)
+                            .background(AccentOrange, CircleShape),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("↙", color = Color(0xFF4ADE80), fontWeight = FontWeight.Black, fontSize = 18.sp)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Masuk", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Color.White)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                formatCurrency(totalIncome), 
-                                style = MaterialTheme.typography.titleMedium, 
-                                fontWeight = FontWeight.Black, 
-                                color = Color(0xFF4ADE80)
-                            )
-                        }
+                        Text("💳", fontSize = 18.sp)
                     }
-                    
-                    // Pengeluaran Box
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-                            .padding(14.dp)
-                    ) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("↗", color = Color(0xFFFB7185), fontWeight = FontWeight.Black, fontSize = 18.sp)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Keluar", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Color.White)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                formatCurrency(totalExpense), 
-                                style = MaterialTheme.typography.titleMedium, 
-                                fontWeight = FontWeight.Black, 
-                                color = Color(0xFFFB7185)
-                            )
-                        }
-                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Sisa: " + formatCurrency(remainingAmount),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = DarkNavBrown
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Sub-metrics (Masuk vs Keluar)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(horizontalAlignment = Alignment.Start) {
+                    Text("Pemasukan", fontSize = 11.sp, color = DarkNavBrown.copy(alpha = 0.7f), fontWeight = FontWeight.Medium)
+                    Text(formatCurrency(totalIncome), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF047857))
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Pengeluaran", fontSize = 11.sp, color = DarkNavBrown.copy(alpha = 0.7f), fontWeight = FontWeight.Medium)
+                    Text(formatCurrency(totalExpense), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AccentOrange)
                 }
             }
         }
@@ -1043,9 +1113,9 @@ fun TransactionItem(item: TransactionWithDetails) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
         shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -1122,6 +1192,11 @@ fun TransactionItem(item: TransactionWithDetails) {
 // Fungsi Bantuan (Helper)
 fun formatCurrency(amount: Double): String {
     val format = NumberFormat.getCurrencyInstance(Locale("id", "ID"))
+    if (amount % 1.0 == 0.0) {
+        format.maximumFractionDigits = 0
+    } else {
+        format.maximumFractionDigits = 2
+    }
     return format.format(amount).replace("Rp", "Rp ")
 }
 
@@ -1135,20 +1210,18 @@ fun WalletCard(
     wallet: com.dhandy.smartbudget.data.local.entity.WalletEntity,
     onClick: () -> Unit
 ) {
-    val gradientColors = getGradientForName(wallet.name)
     Card(
         modifier = Modifier
             .width(170.dp)
             .height(105.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        colors = CardDefaults.cardColors(containerColor = WarmYellowCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(brush = Brush.linearGradient(gradientColors))
                 .padding(14.dp)
         ) {
             Column(
@@ -1164,13 +1237,12 @@ fun WalletCard(
                         text = wallet.name,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color.White,
+                        color = DarkNavBrown,
                         maxLines = 1
                     )
                     Text(
-                        text = "⚡", 
-                        fontSize = 16.sp,
-                        color = Color.White.copy(alpha = 0.8f)
+                        text = "💳", 
+                        fontSize = 16.sp
                     )
                 }
                 
@@ -1179,7 +1251,7 @@ fun WalletCard(
                         text = "SALDO",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = DarkNavBrown.copy(alpha = 0.6f),
                         letterSpacing = 1.sp
                     )
                     Spacer(modifier = Modifier.height(2.dp))
@@ -1187,7 +1259,7 @@ fun WalletCard(
                         text = formatCurrency(wallet.currentBalance),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black,
-                        color = Color.White
+                        color = DarkNavBrown
                     )
                 }
             }
@@ -1202,7 +1274,6 @@ fun TargetCard(
 ) {
     val progress = if (target.targetAmount > 0) (target.currentAmount / target.targetAmount).toFloat().coerceIn(0f, 1f) else 0f
     val percentage = (progress * 100).toInt()
-    val gradientColors = getGradientForName(target.name)
 
     Card(
         modifier = Modifier
@@ -1211,9 +1282,9 @@ fun TargetCard(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+            containerColor = Color.White
         ),
-        border = BorderStroke(1.5.dp, Brush.linearGradient(gradientColors.map { it.copy(alpha = 0.5f) })),
+        border = BorderStroke(1.dp, WarmCardSubtle),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
@@ -1232,7 +1303,7 @@ fun TargetCard(
                         text = target.name,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = DarkNavBrown,
                         maxLines = 1,
                         modifier = Modifier.weight(1f)
                     )
@@ -1242,7 +1313,7 @@ fun TargetCard(
                 Text(
                     text = "${formatCurrency(target.currentAmount)} / ${formatCurrency(target.targetAmount)}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    color = MutedTextBrown,
                     maxLines = 1
                 )
             }
@@ -1253,7 +1324,7 @@ fun TargetCard(
                         .fillMaxWidth()
                         .height(8.dp)
                         .background(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                            color = WarmBackground,
                             shape = RoundedCornerShape(4.dp)
                         )
                 ) {
@@ -1263,7 +1334,7 @@ fun TargetCard(
                                 .fillMaxWidth(progress)
                                 .fillMaxHeight()
                                 .background(
-                                    brush = Brush.linearGradient(gradientColors),
+                                    color = AccentOrange,
                                     shape = RoundedCornerShape(4.dp)
                                 )
                         )
@@ -1279,14 +1350,14 @@ fun TargetCard(
                         text = "Terkumpul $percentage%",
                         style = androidx.compose.ui.text.TextStyle(fontSize = 11.sp),
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                        color = DarkNavBrown.copy(alpha = 0.8f)
                     )
                     if (progress >= 1f) {
                         Text(
                             text = "SELESAI 🎉",
                             style = androidx.compose.ui.text.TextStyle(fontSize = 9.sp),
                             fontWeight = FontWeight.Black,
-                            color = Color(0xFF4ADE80)
+                            color = Color(0xFF047857)
                         )
                     }
                 }
@@ -1321,39 +1392,99 @@ fun getCategoryEmojiAndColor(categoryName: String, isIncome: Boolean): Pair<Stri
 }
 
 @Composable
-fun ThemeToggleSwitch(
-    isDark: Boolean,
-    onToggle: () -> Unit
+fun ThemeCoinButton(
+    coinRotation: Float,
+    isAnimating: Boolean,
+    onPositioned: (Offset) -> Unit,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val angle = ((coinRotation % 360f) + 360f) % 360f
+    val isBackFace = angle in 90f..270f
+    val normalizedPhase = (((coinRotation % 180f) + 180f) % 180f) / 180f
+    val hop = kotlin.math.sin(normalizedPhase * Math.PI).toFloat()
+
     Box(
-        modifier = Modifier
-            .width(62.dp)
-            .height(34.dp)
-            .background(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(17.dp)
-            )
-            .clickable(onClick = onToggle)
-            .padding(4.dp),
-        contentAlignment = if (isDark) Alignment.CenterEnd else Alignment.CenterStart
+        modifier = modifier
+            .onGloballyPositioned { coordinates ->
+                val pos = coordinates.positionInRoot()
+                val size = coordinates.size
+                onPositioned(Offset(pos.x + size.width / 2f, pos.y + size.height / 2f))
+            }
+            .size(44.dp)
+            .graphicsLayer {
+                rotationY = coinRotation
+                cameraDistance = 16f * density
+                translationY = -hop * 16.dp.toPx()
+                scaleX = 1f + hop * 0.15f
+                scaleY = 1f + hop * 0.15f
+                shadowElevation = (3.dp + (hop * 10).dp).toPx()
+                shape = CircleShape
+                clip = false
+            }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                if (!isAnimating) {
+                    onToggle()
+                }
+            },
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(26.dp)
-                .background(
-                    brush = if (isDark) {
-                        Brush.linearGradient(listOf(Color(0xFF334155), Color(0xFF1E293B)))
-                    } else {
-                        Brush.linearGradient(listOf(Color(0xFFFDE047), Color(0xFFEAB308)))
-                    },
-                    shape = CircleShape
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = if (isDark) "🌙" else "☀️",
-                fontSize = 13.sp
-            )
+        if (isBackFace) {
+            // Moon face (Dark mode — Sleek Jet Black & Pure White Ring)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { rotationY = 180f }
+                    .background(
+                        color = Color.Black,
+                        shape = CircleShape
+                    )
+                    .border(
+                        width = 2.dp,
+                        color = Color.White,
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(33.dp)
+                        .border(1.dp, Color(0xFF555555), CircleShape)
+                )
+                Text(
+                    text = "🌙",
+                    fontSize = 17.sp
+                )
+            }
+        } else {
+            // Sun face (Light mode — Crisp Pure White & Jet Black Ring)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        color = Color.White,
+                        shape = CircleShape
+                    )
+                    .border(
+                        width = 2.dp,
+                        color = Color.Black,
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(33.dp)
+                        .border(1.dp, Color(0xFFDDDDDD), CircleShape)
+                )
+                Text(
+                    text = "☀️",
+                    fontSize = 17.sp
+                )
+            }
         }
     }
 }
