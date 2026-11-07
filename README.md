@@ -47,6 +47,14 @@
 
 ---
 
+## 📦 Unduh Aplikasi (Download APK)
+
+Anda dapat mengunduh file APK siap pakai versi terbaru:
+- **[Download SmartBudget v1.1.0 (APK)](https://github.com/YuutoEi/SmartBudget/releases/download/v1.1.0/SmartBudget-v1.1.0.apk)** *(Terbaru)*
+- Versi sebelumnya tersedia di [GitHub Releases](https://github.com/YuutoEi/SmartBudget/releases).
+
+---
+
 ## 📄 Lisensi
 
 Didistribusikan di bawah lisensi MIT. Lihat file `LICENSE` untuk informasi lebih lanjut.
